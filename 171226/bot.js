@@ -5,7 +5,7 @@ const botClient = require('bot-client');
 const creds = {
   email: "",
   password: ""
-}; 
+};
 var newNote = false;
 var dayForCreate = false;
 var dayWeek;
