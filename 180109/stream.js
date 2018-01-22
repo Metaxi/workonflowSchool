@@ -1,4 +1,4 @@
-/*jshint esversion: 6 */
+
 const botClient = require('bot-client');
 const shortid = require('shortid');
 // только что созданные вами авторизационные данные
@@ -7,22 +7,29 @@ const creds = {
   password: ""
 };
 
-var delStream = false;
-var res;
-var checkId = false;
-var streamNamesIdFlag = false;
+
+var deleteStreamAskedFlag = false;
+var renameStreamAskedFlag = false;
+var newNameAskedFlag = false;
+var checkStreamName;
 var allNames;
 var randomName;
-var check;
+// переменные для добавления пользователя
+var checkUserInput;
+var checkStreamInput;
+var userAskedFlag = false;
+var userCheckedStreamAskedFlag = false;
+var adminStreamAskedFlag = false;
+var userForAdminAskedFlag = false;
 
-const { comment, stream, thread } = botClient.connect(creds);
+
+const { comment, stream, thread, contact } = botClient.connect(creds);
 
 // оптимизация. Функция, которая повторялась. Она единственная асинхронная.
 async function botPost (teamId, to, answer) {
     const att = [{ type: 'text', data: { text: answer } }];
     await comment.create(teamId, { to, att });
 }
-
 // Функция принимает список стримов и возвращает список названий и id конкретного админа.
 async function nameList(teamId) {
     let allStreams = await stream.read(teamId, {})
@@ -31,14 +38,77 @@ async function nameList(teamId) {
     for (var i=0; i<allStreams.data.length; i++) {
                 // в условии только админы с уникальным id
         if (allStreams.data[i].admins[0] == '5a3a587b19e9f8001fb1bf8b') {
-            let objectStream = {}
-            objectStream.title = allStreams.data[i].name
-            objectStream.id = allStreams.data[i]._id
-            nameList.push(objectStream)
+            let objectStream = {};
+            objectStream.title = allStreams.data[i].name;
+            objectStream.id = allStreams.data[i]._id;
+            nameList.push(objectStream);
         }
     }
-    return nameList
+    return nameList;
 }
+// Функция получения списка пользователей и вывод списка из трех параметров.
+async function userList(teamId) {
+    const userList = await contact.read ( teamId, {billingType: 'users'})
+    // console.log("userList: \n", userList.data[0].basicData);
+    let users = [];
+    for (var i=0; i<userList.data.length; i++) {
+                // в условии только админы с уникальным id
+            let objectStream = {};
+            objectStream.title = userList.data[i].basicData.name;
+            objectStream.email = userList.data[i].basicData.email;
+            objectStream.id = userList.data[i]._id;
+            users.push(objectStream);
+    }
+    return users;
+}
+// Функция получения всех пользователей данного стрима
+async function usersOfStreamList(teamId, streamId) {
+    let oneStream = await stream.read(teamId, {id: streamId})
+    // const userList = await contact.read ( teamId, {billingType: 'users'})
+    let allUsers = await userList(teamId)
+    // console.log("oneStream:\n", oneStream);
+    console.log("allUsers:\n", allUsers);
+
+    // let users = [];
+    let userIdList = [];
+    let checkedIdName = []
+    // let objectStream = {};
+    let checkIdReturnName = [];
+    for (var i=0; i<oneStream.data[0].roles.length; i++) {
+            userIdList.push(oneStream.data[0].roles[i]);
+    }
+    console.log("users of stream:\n", userIdList);
+    // for (var i=0; i<userList.data.length; i++) {
+    //
+    //             // в условии только админы с уникальным id
+    //         objectStream.title = userList.data[i].basicData.name;
+    //         console.log("objectStream.title:\n", objectStream.title);
+    //         objectStream.id = userList.data[i]._id;
+    //         console.log("objectStream.id:\n", objectStream.id);
+    //         users.push(objectStream);
+    //         console.log("users of all 1:\n", users);
+    // }
+    // console.log("users of all 2:\n", users);
+    for (var i=0; i<allUsers.length; i++) {
+        checkIdReturnName = userIdList.map(userId => {
+            if (userId == allUsers[i].id) {
+                console.log('in condition >? ', allUsers[i])
+                return allUsers[i]
+            }
+            // return allUsers[i].title && userId == allUsers[i].id
+        })
+        console.log("checkIdReturnName 1:\n", checkIdReturnName);
+        if (checkIdReturnName) {
+            checkedIdName.push(checkIdReturnName)
+        }
+        console.log("checkIdReturnName 2:\n", checkIdReturnName);
+        console.log("checkedIdName 1:\n", checkedIdName);
+    }
+    console.log("checkedIdName 2:\n", checkedIdName);
+    return checkedIdName
+
+}
+
 
 // Функция для обработки ответов пользователя.
 // async function requestResponse (paramGet, text, firstAsk, errorAsk, confirm) {
@@ -47,8 +117,7 @@ async function nameList(teamId) {
 //
 //     let matching = await text.match(/paramGet/i)
 //     if (matching == paramGet) {
-//         const answer = confirm
-//         await botPost(teamId, to, answer)
+//    ch botPost(teamId, to, answer)
 //         return
 //     } else {
 //         const answer = errorAsk
@@ -64,111 +133,100 @@ comment.onDirect(async message => {
     const { teamId } = message;
     const to = message.data.content.from;
     const { data: { text}} = message.data.content.att[0];
-// test
-  // let allNames = await stream.read(teamId, {})
-  // console.log("all names:\n", allNames.data[1].name );
 
+const checker =  await usersOfStreamList(teamId, "5a65b97e8b3b170015b418ea")
+const users = await userList(teamId);
+console.log("checker:\n", checker);
+// console.log("users", users);
+
+// help
+    if (text.match(/help/i)) {
+        const answer = "help - show the command help\nc s - create stream (with random name)\ng l s - get last stream\ng a s - get all streams\nd a s - delete all streams\nd l s - delete last stream\nd s - delete stream (you chosen)\nr s - rename stream\nn u - new user (add to stream you chosen)"
+        await botPost(teamId, to, answer)
+        return
+    }
 // создание стрима
     if (text.match(/c s/)) {
-      //  генератор случайной строки
-            // if ( var a !== 3) {
-            //     console.log(shortid.generate());
-            //     randomName = shortid.generate()
-            //     a++;
-            // }
-            const name = 'stream_' + shortid.generate()
+            const streamName = 'stream_' + shortid.generate()
             // создание стрима
-            res = await stream.create(teamId, { name: name })
+            const createdStream = await stream.create(teamId, { name: streamName })
             // вывод в консоль
-            console.log('create stream:\n', res)
+            // console.log('create stream:\n', createdStream)
             // мой ответ бота
-            const answer = `Stream named ${name}, \nwith id ${res.data.id}\nis created.`
+            const answer = `Stream named ${streamName}, \nwith id ${createdStream.data.id}\nis created.`
             await botPost(teamId, to, answer)
             return
         }
 // получение id только что созданного стрима
     if (text.match(/g l s/)) {
-      //  получение объекта стрим
-        const resGet = await stream.read(teamId, { id: res.data.id })
-      // сообщение в консоль
-        console.log('read stream:\n', resGet)
-      // сообщение бота
-        const answer = `Getting stream with id ${res.data.id}...`
-        await botPost(teamId, to, answer)
-        return
+      const streamsNameAndId = await nameList(teamId)
+      if (streamsNameAndId.length != 0) {
+          const answer = `The last stream is: ${streamsNameAndId[streamsNameAndId.length - 1].title}`
+          await botPost(teamId, to, answer)
+          return
+      } else {
+          const answer = 'There are no streams to delete'
+          await botPost(teamId, to, answer)
+      }
     }
 // получение всех стримов
     if (text.match(/g a s/)) {
-      // получение всех стримов
-        const resGet = await stream.read(teamId, {})
+        const streamsNameAndId = await nameList(teamId)
+        if (streamsNameAndId.length != 0) {
+            const answer = `There are streams like these: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}`
+            await botPost(teamId, to, answer)
+            return
+        } else {
+            const answer = 'There are no streams to show'
+            await botPost(teamId, to, answer)
+        }
 
-        console.log('read stream:\n', resGet)
-
-        const answer = `Getting streams...`
-        await botPost(teamId, to, answer)
-
-        return
     }
 // удаление всех стримов
     if (text.match(/d a s/)) {
-        // получение всех стримов
-        let allStreams = await stream.read(teamId, {})
-        console.log("allStreams:\n", allStreams);
-        console.log("allStreams.data.length:\n", allStreams.data.length);
-        // удаление всех стримов бота с определенным id
-        for (var i=0; i<allStreams.data.length; i++) {
-         // в условии только админы с уникальным id
-            if (allStreams.data[i].admins[0] == '5a3a587b19e9f8001fb1bf8b') {
-                console.log("allStreams.data.id:\n", allStreams.data[i]._id);
-                await stream.delete(teamId, { id: allStreams.data[i]._id })
+        const streamsNameAndId = await nameList(teamId)
+        // console.log("streamsNameAndId:\n", streamsNameAndId.length == 0);
+        if (streamsNameAndId.length != 0) {
+            for (var i=0; i<streamsNameAndId.length; i++) {
+                await stream.delete(teamId, { id: streamsNameAndId[i].id })
+                const answer = `Stream ${streamsNameAndId[i].title} is deleted`
+                await botPost(teamId, to, answer)
             }
+        } else {
+            const answer = 'There are no streams to delete'
+            await botPost(teamId, to, answer)
         }
-
-        console.log('Streams of hello@bot are deleted')
-        return
     }
 // удаление только последнего стрима. Глючит иногда
     if (text.match(/d l s/)) {
-
-        let allStreams = await stream.read(teamId, {})
-        console.log("allStreams:\n", allStreams);
-        console.log("allStreams.data.length:\n", allStreams.data.length);
-        // удаление всех стримов бота с определенным id
-        for (var i=allStreams.data.length - 1; i>0; i--) {
-            // в условии только админы с уникальным id
-            console.log(`allStreams.data.admins:\n`, i, " = ", allStreams.data[i].admins[0]);
-                if (allStreams.data[i].admins[0] == '5a3a587b19e9f8001fb1bf8b') {
-                    console.log("allStreams.data.id to delete:\n",i, " = ", allStreams.data[i]._id);
-                    await stream.delete(teamId, { id: allStreams.data[i]._id })
-                    console.log("deleted allStreams.data.id:\n", allStreams.data[i]._id);
-                    console.log("allStreams:\n", allStreams);
-                    console.log("allStreams.data.length:\n", allStreams.data.length)
-                    break
-                }
-            }
-
-            console.log('Last stream of hello@bot are deleted')
-            return
+        const streamsNameAndId = await nameList(teamId)
+        // console.log("streamsNameAndId:\n", streamsNameAndId.length == 0);
+        if (streamsNameAndId.length != 0) {
+            await stream.delete(teamId, { id: streamsNameAndId[streamsNameAndId.length - 1].id })
+            const answer = `Stream ${streamsNameAndId[streamsNameAndId.length - 1].title} is deleted`
+            await botPost(teamId, to, answer)
+        } else {
+            const answer = 'There are no streams to delete'
+            await botPost(teamId, to, answer)
+        }
     }
 // запрос на удаление стрима по его названию
     if (text.match(/d s/)) {
-
-        const streamNamesId = await nameList(teamId)
-        // console.log('streamNamesId >>> ', streamNamesId)
-        const answer = `Which stream would you like to delete? Please, type name from the list: ${streamNamesId.map(stream => {return "\n" + stream.title})}`
+        const streamsNameAndId = await nameList(teamId)
+        // console.log('streamsNameAndId >>> ', streamsNameAndId)
+        const answer = `Which stream would you like to delete? Please, type name from the list: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}`
         await botPost(teamId, to, answer)
 
-        delStream = true;
-        // console.log("del stream: ", delStream);
-        // console.log("streamNamesId: \n", streamNamesId);
-
+        deleteStreamAskedFlag = true;
+        // console.log("del stream: ", deleteStreamAskedFlag);
+        // console.log("streamsNameAndId: \n", streamsNameAndId);
         return
     }
 // Удаление стрима. Ответ
-    if (delStream) {
+    if (deleteStreamAskedFlag) {
         // console.log("text: \n", text);
-        const streamNamesId = await nameList(teamId)
-        let check = streamNamesId.find(typeUser => {
+        const streamsNameAndId = await nameList(teamId)
+        let check = streamsNameAndId.find(typeUser => {
             return typeUser && typeUser.title == text
         })
         // console.log('check > ', check)
@@ -179,7 +237,7 @@ comment.onDirect(async message => {
             if (response.code == 200) {
                 const answer = `Stream named ${check.title} is deleted.`
                 await botPost(teamId, to, answer)
-                delStream = false;
+                deleteStreamAskedFlag = false;
                 return
             } else {
                 const answer = `Some ERR: ${response.message}`
@@ -188,77 +246,212 @@ comment.onDirect(async message => {
             }
         } else {
             // console.log("noDay for read")
-            const answer = `There are no stream like: ${text}. Please, type name of stream from the list: ${streamNamesId.map(stream => {return stream.title})}.`
+            const answer = `There are no stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(stream => {return stream.title})}.`
 
             await botPost(teamId, to, answer)
             return
         }
     }
-// переименование стрима по запросу пользователя
-    if (text.match(/n s/)) {
-        const streamNamesId = await nameList(teamId)
-        // console.log('streamNamesId >>> ', streamNamesId)
-        const answer = `Which stream would you like to rename? Please, type name from the list: ${streamNamesId.map(stream => {return "\n" + stream.title})}`
+// Запрос. Какой стрим переименовать?
+    if (text.match(/r s/)) {
+        const streamsNameAndId = await nameList(teamId)
+        // console.log('streamsNameAndId >>> ', streamsNameAndId)
+        const answer = `Which stream would you like to rename? Please, type name from the list: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}`
         await botPost(teamId, to, answer)
 
-        streamNamesIdFlag = true;
-        // console.log("streamNamesIdFlag: ", streamNamesIdFlag);
-        console.log("streamNamesId: \n", streamNamesId);
+        renameStreamAskedFlag = true;
+        // console.log("renameStreamAskedFlag: ", renameStreamAskedFlag);
+        // console.log("streamsNameAndId: \n", streamsNameAndId);
 
         return
     }
-
 // Переименование стрима. Ответ и запрос и снова ответ.
-    if (streamNamesIdFlag) {
-        console.log("text: \n", text);
-        const streamNamesId = await nameList(teamId)
-
-        check = streamNamesId.find(typeUser => {
+    if (renameStreamAskedFlag) {
+        const streamsNameAndId = await nameList(teamId)
+        checkStreamName = streamsNameAndId.find(typeUser => {
             return typeUser && typeUser.title == text
         })
-        console.log('check > ', check)
-
-        if (check) {
-
-            console.log("Text of renaming stream is correct!")
-            console.log("streamNameToRename > ", text)
-
-            const answer = "Input new name for chosen stream"
+        // console.log('checkStreamName > ', checkStreamName)
+        if (checkStreamName) {
+            // console.log("Text of renaming stream is correct!")
+            // console.log("streamNameToRename > ", text)
+            const answer = `What new name would you like to set for ${checkStreamName}?`
             await botPost(teamId, to, answer)
 
-            checkId = true;
-            console.log("checkId: ", checkId);
-            streamNamesIdFlag = false
+            newNameAskedFlag = true;
+            console.log("checkedNameSet: ", checkedNameSet);
+            renameStreamAskedFlag = false
             return
         } else {
             console.log("noDay for read")
-            const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamNamesId.map(stream => {return "\n" + stream.title})}.`
+            const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}.`
 
             await botPost(teamId, to, answer)
             return
         }
         return
     }
-
-// Получение нового имени и Удаление
-    if (checkId) {
-        console.log("We are inside checkId");
-        const response = await stream.setName(teamId, { id: check.id, name: text })
+// Получение нового имени и переименование
+    if (newNameAskedFlag) {
+        console.log("We are renaming");
+        const response = await stream.setName(teamId, { id: checkStreamName.id, name: text })
             if (response.code == 200) {
-                const answer = `Stream named ${check.title} is renamed.`
+                const answer = `Stream named ${checkStreamName.title} is renamed.`
                 await botPost(teamId, to, answer)
-                delStream = false;
+                newNameAskedFlag = false;
                 return
             } else {
                 const answer = `Some ERR: ${response.message}`
                 await botPost(teamId, to, answer)
                 return
             }
+        newNameAskedFlag = false;
+    }
+// Запрос. Выберите пользователя?
+    if (text.match(/n u/)) {
+        const users = await userList(teamId);
+        // console.log("users:\n", users);
+        const answer = `What user do you want to add? Choose from list, please. ${users.map(stream => {return "\n" + stream.title})}.`
+        await botPost(teamId, to, answer);
 
+        userAskedFlag = true;
+        return;
+    }
+// Ответ. Проверка пользователя. Выберите стрим?
+    if (userAskedFlag) {
+        const users = await userList(teamId);
+        const streamsNameAndId = await nameList(teamId)
+        // console.log("streamsNameAndId:\n", streamsNameAndId);
+        // проверка введенного имени на сответствие дному из списка пользователей.
+        checkUserInput = users.find(typeUser => {
+            return typeUser && typeUser.title == text
+        })
+        // console.log('checkUserSet > ', checkUserSet)
+
+        if (checkUserInput) {
+            const answer = `Ok. What stream from the list below do you wish to add ${checkUserInput.title} to? ${streamsNameAndId.map(stream => {return "\n" + stream.title})}`
+            await botPost(teamId, to, answer)
+            userCheckedStreamAskedFlag = true
+            userAskedFlag = false
+
+            return
+        } else {
+            const answer = `There are no user like: ${text}. Please, type name of user from the list below: ${users.map(stream => {return "\n" + stream.title})}.`
+
+            await botPost(teamId, to, answer)
+            return
+        }
+    }
+    // Ответ. Проверка стрима. Добавление пользователя в стрим.
+    if (userCheckedStreamAskedFlag) {
+        const streamsNameAndId = await nameList(teamId)
+        // console.log("We are inside userCheckedStreamAskedFlag");
+        // console.log("streamsNameAndId:\n", streamsNameAndId);
+        checkStreamInput = streamsNameAndId.find(typeUser => {
+            return typeUser && typeUser.title == text
+        })
+        if (checkStreamInput) {
+            const response = await stream.setUser(teamId, { id: checkStreamInput.id, userId: checkUserInput.id })
+                if (response.code == 200) {
+                    const answer = `${checkUserInput.title} has added to ${checkStreamInput.title}.`
+                    await botPost(teamId, to, answer)
+                    userCheckedStreamAskedFlag = false;
+                    return
+                } else {
+                    const answer = `Some ERR: ${response.message}`
+                    await botPost(teamId, to, answer)
+                    return
+                }
+            userCheckedStreamAskedFlag = false;
+        } else {
+            // console.log("There are no stream like this")
+            const answer = `There are no stream like: ${text}. Please, type name of stream from the list below: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}.`
+            await botPost(teamId, to, answer)
+            return
+        }
+    }
+// Назначить пользователя админом стрима. Запрос. Какой стрим?
+// Запрос. Какой стрим переименовать?
+    if (text.match(/a u/)) {
+        const streamsNameAndId = await nameList(teamId)
+        // console.log('streamsNameAndId >>> ', streamsNameAndId)
+        const answer = `Where do you going to set admin? Please, type name from the list: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}`
+        await botPost(teamId, to, answer)
+        adminStreamAskedFlag = true;
+        // console.log("adminStreamAskedFlag: ", adminStreamAskedFlag);
+        // console.log("streamsNameAndId: \n", streamsNameAndId);
+        return
+    }
+// Переименование стрима. Ответ и запрос и снова ответ.
+    if (adminStreamAskedFlag) {
+        const streamsNameAndId = await nameList(teamId)
+
+        checkStreamName = streamsNameAndId.find(typeUser => {
+            return typeUser && typeUser.title == text
+        })
+        // console.log('checkStreamName > ', checkStreamName)
+        if (checkStreamName) {
+            // console.log("Text of stream is correct!")
+            // console.log("streamNameToSetAdmin > ", text)
+            const usersListOfStream = await usersOfStreamList(teamId, checkStreamName.id)
+            console.log("usersListOfStream:\n", usersListOfStream);
+            const users = await userList(teamId);
+            const answer = `What user would you like to set admin in ${checkStreamName.title}. List users to choose: ${usersListOfStream.map(stream => {return "\n" + stream})}. ?`
+            await botPost(teamId, to, answer)
+
+            userForAdminAskedFlag = true;
+            console.log("userForAdminAskedFlag: ", userForAdminAskedFlag);
+            adminStreamAskedFlag = false
+            return
+        } else {
+            console.log("noDay for read")
+            const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(stream => {return "\n" + stream.title})}.`
+            await botPost(teamId, to, answer)
+            return
+        }
+        return
+    }
+// Получение имени и назначение админа
+    if (userForAdminAskedFlag) {
+        const users = await userList(teamId);
+        const usersListOfStream = await usersOfStreamList(teamId, checkStreamName.id)
+        const streamsNameAndId = await nameList(teamId)
+        // console.log("streamsNameAndId:\n", streamsNameAndId);
+        // проверка введенного имени на сответствие дному из списка пользователей.
+        checkUserInput = users.find(typeUser => {
+            return typeUser && typeUser.title == text
+        })
+        if (checkUserInput) {
+            checkUserId = usersListOfStream.find(typeUser => {
+                return typeUser && typeUser == checkUserInput.id
+            })
+            if (checkUserId) {
+                console.log("We are inside admin Set");
+                const response = await stream.setAdmin(teamId, { id: checkStreamName.id, userId: checkUserId.id })
+                    if (response.code == 200) {
+                        const answer = `User ${checkUserInput.title} has become the admin of ${checkStreamName.title}.`
+                        await botPost(teamId, to, answer)
+                        newNameAskedFlag = false;
+                        return
+                    } else {
+                        const answer = `Some ERR: ${response.message}`
+                        await botPost(teamId, to, answer)
+                        return
+                    }
+                userForAdminAskedFlag = false;
+            } else {
+                const answer = `There are no users like ${text} in ${checkStreamName.title}.`
+                await botPost(teamId, to, answer)
+            }
+
+        } else {
+            const answer = `There are no users like ${text} in ${checkStreamName.title}.`
+            await botPost(teamId, to, answer)
+        }
     }
 
 // создание треда хардкорно с полями предзаданными и случайным именем.
-  if (text.match(/new thread/)) {
+    if (text.match(/new thread/)) {
       let streamIn = await stream.read(teamId, { id: "5a5ca9748b3b170015b41734"})
       console.log("streamIn: ", streamIn);
 
