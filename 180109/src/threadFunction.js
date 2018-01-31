@@ -1,3 +1,7 @@
+const common = require('./common');
+
+const { nameList, botPost, statusList } = common;
+
 let streamAskedForGetThreadsFlag = false;
 let streamAskedForCreateThreadsFlag = false;
 let streamCheckedThreadNameAsked = false;
@@ -6,54 +10,36 @@ let streamCheckedThreadforRenameAsked = false;
 let threadCheckedNameAsked = false;
 let threadInChecked;
 let checkStreamName;
+let streamAskedForSetStatusThreadsFlag = false;
+let streamCheckedThreadforStatusAsked = false;
+let threadCheckedStatusAsked = false;
 
-// Функция дает боту постить сообщение, которое ему передается.
-async function botPost(teamId, to, answer, comment) {
-  const att = [{ type: 'text', data: { text: answer } }];
-  await comment.create(teamId, { to, att });
-}
-// Функция принимает список стримов и возвращает список названий и id конкретного админа.
-async function nameList(teamId, stream) {
-  const allStreams = await stream.read(teamId, {});
-  // console.log("allStreams:\n", allStreams);
-  const streams = [];
-  for (let i = 0; i < allStreams.data.length; i += 1) {
-  // в условии только админы с уникальным id
-    if (allStreams.data[i].admins[0] === '5a3a587b19e9f8001fb1bf8b') {
-      const objectStream = {};
-      objectStream.title = allStreams.data[i].name;
-      objectStream.id = allStreams.data[i]._id;
-      streams.push(objectStream);
-    }
-  }
-  return streams;
-}
-//
-async function newThread(text, teamId, to, stream, thread) {
-  if (text.match(/n t/)) {
-    const streamsNameAndId = await nameList(teamId);
+async function threadFunction(text, teamId, to, stream, thread, comment, status) {
+  // создание треда. В каком стриме?
+  if (text.match(/t n/)) {
+    const streamsNameAndId = await nameList(teamId, stream);
     // console.log("users:\n", users);
     const answer = `Where do you want to create thread? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    await botPost(teamId, to, answer, comment);
     streamAskedForCreateThreadsFlag = true;
     return;
   }
   // Проверка стрима. Какое имя?
   if (streamAskedForCreateThreadsFlag) {
-    const streamsNameAndId = await nameList(teamId);
+    const streamsNameAndId = await nameList(teamId, stream);
     checkStreamName = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
     if (checkStreamName) {
       // console.log("threads:\n", threadIn);
-      const answer = `What name of thread do you wish to create in ${checkStreamName.title}?`;
-      await botPost(teamId, to, answer);
+      const answer = `What name of thread do you wish to create in <${checkStreamName.title}>?`;
+      await botPost(teamId, to, answer, comment);
       streamAskedForCreateThreadsFlag = false;
       streamCheckedThreadNameAsked = true;
-      // console.log("streamCheckedThreadNameAsked: ", streamCheckedThreadNameAsked);
+      // console.log('treamCheckedThreadNameAsked: ', streamCheckedThreadNameAsked);
       return;
     }
     // console.log("noDay for read")
-    const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    const answer = `There are not stream like: <${text}>. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
     return;
   }
   // Получение имени треда и создание последнего
@@ -63,10 +49,10 @@ async function newThread(text, teamId, to, stream, thread) {
     // console.log('streamIn: ', streamIn);
     // let countThreads = streamIn.data[0].threadsSequence.length;
     // console.log('Число задач до создания новой заметки: ', countThreads);
-    const status = streamIn.data[0].threadStatuses[0];
+    const statusOfThread = streamIn.data[0].threadStatuses[0];
     // console.log('status: ', status);
     const threadCreate = await thread.create(teamId, {
-      statusId: status,
+      statusId: statusOfThread,
       streamId: checkStreamName.id,
       title: text,
       deadline: [null, 1231231231231],
@@ -78,23 +64,23 @@ async function newThread(text, teamId, to, stream, thread) {
       { id: threadCreate.data },
     );
     // console.log('thread: ', threadIn.data[0].title);
-    const answer = `Thread named ${threadIn.data[0].title} is created.`;
-    await botPost(teamId, to, answer);
+    const answer = `Thread <${threadIn.data[0].title}> is created in stream <${checkStreamName.title}>.`;
+    await botPost(teamId, to, answer, comment);
+    return;
   }
-}
-async function getAllThreads(text, teamId, to, thread) {
+
   // Вывод списка тредов. Какой стрим?
-  if (text.match(/g a t/)) {
-    const streamsNameAndId = await nameList(teamId);
+  if (text.match(/t g a/)) {
+    const streamsNameAndId = await nameList(teamId, stream);
     // console.log("users:\n", users);
     const answer = `Where do you want to see threads? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    await botPost(teamId, to, answer, comment);
     streamAskedForGetThreadsFlag = true;
     return;
   }
   // Проверка стрима. Если верно имя, то вывод всех тредов.
   if (streamAskedForGetThreadsFlag) {
-    const streamsNameAndId = await nameList(teamId);
+    const streamsNameAndId = await nameList(teamId, stream);
     checkStreamName = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
     if (checkStreamName) {
       const threadIn = await thread.read(
@@ -102,29 +88,29 @@ async function getAllThreads(text, teamId, to, thread) {
         { streamId: checkStreamName.id },
       );
       // console.log("threads:\n", threadIn);
-      const answer = `Threads of ${checkStreamName.title} are ${threadIn.data.map(element => `\n${element.title}`)}.`;
-      await botPost(teamId, to, answer);
+      const answer = `Threads of <${checkStreamName.title}> are ${threadIn.data.map(element => `\n${element.title}`)}.`;
+      await botPost(teamId, to, answer, comment);
       streamAskedForGetThreadsFlag = false;
       return;
     }
     // console.log("noDay for read")
-    const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    const answer = `There are not stream like: <${text}>. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
+    return;
   }
-}
-async function renameThread(text, teamId, to, thread) {
+
   // Переименование треда. Какой стрим?
-  if (text.match(/r t/)) {
-    const streamsNameAndId = await nameList(teamId);
+  if (text.match(/t n/)) {
+    const streamsNameAndId = await nameList(teamId, stream);
     // console.log("users:\n", users);
     const answer = `Where do you want to rename thread? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    await botPost(teamId, to, answer, comment);
     streamAskedForRenameThreadsFlag = true;
     return;
   }
   // Проверка стрима. Какое тред переименовывать?
   if (streamAskedForRenameThreadsFlag) {
-    const streamsNameAndId = await nameList(teamId);
+    const streamsNameAndId = await nameList(teamId, stream);
     checkStreamName = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
     if (checkStreamName) {
       const threadIn = await thread.read(
@@ -132,16 +118,16 @@ async function renameThread(text, teamId, to, thread) {
         { streamId: checkStreamName.id },
       );
       // console.log('threads:\n', threadIn);
-      const answer = `What thread do you wish to rename in ${checkStreamName.title}? There are the threads: ${threadIn.data.map(element => `\n${element.title}`)}.`;
-      await botPost(teamId, to, answer);
+      const answer = `What thread do you wish to rename in <${checkStreamName.title}>? There are the threads: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+      await botPost(teamId, to, answer, comment);
       streamAskedForRenameThreadsFlag = false;
       streamCheckedThreadforRenameAsked = true;
       // console.log('streamCheckedThreadforRenameAsked: ', streamCheckedThreadforRenameAsked);
       return;
     }
     // console.log("noDay for read")
-    const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    const answer = `There are not stream like: <${text}>. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
     return;
   }
   // Проверка имени треда. Какое новое имя будет у треда?
@@ -154,24 +140,103 @@ async function renameThread(text, teamId, to, thread) {
     threadInChecked = threadIn.data.find(typeUser => typeUser && typeUser.title === text);
     // console.log('threadInChecked:\n', threadInChecked);
     if (threadInChecked) {
-      const answer = `What new name do you wish to give to thread: ${threadInChecked.title}?`;
-      await botPost(teamId, to, answer);
+      const answer = `What new name do you wish to give to thread: <${threadInChecked.title}>?`;
+      await botPost(teamId, to, answer, comment);
       threadCheckedNameAsked = true;
       // console.log('threadCheckedNameAsked:\n', threadCheckedNameAsked);
       streamCheckedThreadforRenameAsked = false;
       return;
     }
-    const answer = `There are not thread like: ${text} in stream: ${checkStreamName.title}. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, answer);
+    const answer = `There are not thread like: <${text}> in stream: <${checkStreamName.title}>. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
     return;
   }
   // Переименование треда.
   if (threadCheckedNameAsked) {
     // console.log('threadInChecked._id: ', threadInChecked._id);
     await thread.setTitle(teamId, { id: threadInChecked._id, title: text });
-    const answer = `Thread ${threadInChecked.title} renamed to ${text} in stream: ${checkStreamName.title}`;
-    await botPost(teamId, to, answer);
+    const answer = `Thread <${threadInChecked.title}> renamed to <${text}> in stream: ${checkStreamName.title}`;
+    await botPost(teamId, to, answer, comment);
     threadCheckedNameAsked = false;
+    return;
+  }
+
+  // Перемешение треда по статусам? Какой стрим?
+  if (text.match(/t m ss/)) {
+    const streamsNameAndId = await nameList(teamId, stream);
+    // console.log("users:\n", users);
+    const answer = `Where do you want to set status for thread? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
+    streamAskedForSetStatusThreadsFlag = true;
+    return;
+  }
+  // Проверка стрима. Какой тред переносить?
+  if (streamAskedForSetStatusThreadsFlag) {
+    const streamsNameAndId = await nameList(teamId, stream);
+    checkStreamName = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
+    if (checkStreamName) {
+      const threadIn = await thread.read(
+        teamId,
+        { streamId: checkStreamName.id },
+      );
+      // console.log('threads:\n', threadIn);
+      const answer = `What thread do you wish to set new status in <${checkStreamName.title}>? There are the threads: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+      await botPost(teamId, to, answer, comment);
+      streamAskedForSetStatusThreadsFlag = false;
+      streamCheckedThreadforStatusAsked = true;
+      // console.log('streamCheckedThreadforRenameAsked: ', streamCheckedThreadforRenameAsked);
+      return;
+    }
+    const answer = `There are not stream like: <${text}>. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
+    return;
+  }
+  // Проверка треда. В какой статус переносить тред?
+  if (streamCheckedThreadforStatusAsked) {
+    const threadIn = await thread.read(
+      teamId,
+      { streamId: checkStreamName.id },
+    );
+    const statusOfStream = await statusList(teamId, status, checkStreamName.id);
+    // console.log('threads:\n', threadIn);
+    threadInChecked = threadIn.data.find(typeUser => typeUser && typeUser.title === text);
+    // console.log('threadInChecked:\n', threadInChecked);
+    if (threadInChecked) {
+      const answer = `What new status do you wish to give to thread: <${threadInChecked.title}>? Please, choose from the list:${statusOfStream.map(element => `\n${element.title}`)}`;
+      await botPost(teamId, to, answer, comment);
+      threadCheckedStatusAsked = true;
+      // console.log('threadCheckedNameAsked:\n', threadCheckedNameAsked);
+      streamCheckedThreadforStatusAsked = false;
+      return;
+    }
+    const answer = `There are not thread like: ${text} in stream: ${checkStreamName.title}. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
+    return;
+  }
+  // Проверка статуса. Перенос.
+  if (threadCheckedStatusAsked) {
+    const threadIn = await thread.read(
+      teamId,
+      { streamId: checkStreamName.id },
+    );
+    const statusOfStream = await statusList(teamId, status, checkStreamName.id);
+    // console.log('statusOfStream:\n', statusOfStream);
+    const statusChecked = statusOfStream.find(element => element && element.title === text);
+    // console.log('statusChecked1:\n', statusChecked);
+    // console.log('threadInChecked:\n', threadInChecked);
+    if (statusChecked) {
+      // console.log('statusChecked2:\n', statusChecked);
+      // console.log('threadInChecked.id:\n', threadInChecked._id);
+      // console.log('statusChecked._id:\n', statusChecked._id);
+      await thread.setStatus(teamId, { id: threadInChecked._id, statusId: statusChecked.id });
+      const answer = `Status of thread <${threadInChecked.title}> changed to <${statusChecked.title}> in stream <${checkStreamName.title}>?`;
+      await botPost(teamId, to, answer, comment);
+      threadCheckedStatusAsked = false;
+      return;
+    }
+    const answer = `There are not status like: ${text} in stream: <${checkStreamName.title}>. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer, comment);
+    return;
   }
 }
-module.exports = { newThread, getAllThreads, renameThread };
+module.exports = threadFunction;
