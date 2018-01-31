@@ -1,21 +1,9 @@
-// import {botClient} from 'bot-client';
-// import { newThread, getAllThreads, renameThread } from './threads';
-
-// const threads = require('threads');
-
-// const getAllThreads = require('threads');
-// const renameThread = require('threads');
-
-// const { newThread, getAllThreads, renameThread } = threads;
+const app = require('./src/index');
 
 const botClient = require('bot-client');
 const shortid = require('shortid');
 
-// только что созданные вами авторизационные данные
-const creds = {
-  email: '',
-  password: '',
-};
+const { creds, threadFunction } = app;
 
 let deleteStreamAskedFlag = false;
 let renameStreamAskedFlag = false;
@@ -35,9 +23,14 @@ let streamAskedForRenameThreadsFlag = false;
 let streamCheckedThreadforRenameAsked = false;
 let threadCheckedNameAsked = false;
 let threadInChecked;
+let streamAskedForCensorFlag = false;
+const stopWords = ['qwer', 'asdf'];
+let streamAskedForSetStatusThreadsFlag = false;
+let streamCheckedThreadforStatusAsked = false;
+let threadCheckedStatusAsked = false;
 
 const {
-  comment, stream, thread, contact,
+  comment, stream, thread, contact, status,
 } = botClient.connect(creds);
 
 // Функция дает боту постить сообщение, которое ему передается.
@@ -106,6 +99,20 @@ async function usersOfStreamList(teamId, streamId) {
   // console.log("checkedIdName 2:\n", checkedIdName);
   return checkedIdName;
 }
+// Функция получения всех статусов стрима
+async function statusList(teamId, streamId) {
+  const statusOfStream = await status.read(teamId, { streamId: streamId });
+  // console.log("userList: \n", userList.data[0].basicData);
+  const statuses = [];
+  for (let i = 0; i < statusOfStream.data.length; i += 1) {
+    // в условии только админы с уникальным id
+    const objectStream = {};
+    objectStream.title = statusOfStream.data[i].name;
+    objectStream.id = statusOfStream.data[i]._id;
+    statuses.push(objectStream);
+  }
+  return statuses;
+}
 // Функция для обработки ответов пользователя.
 // async function requestResponse (paramGet, text, firstAsk, errorAsk, confirm) {
 //     const answer = firstAsk
@@ -131,7 +138,7 @@ comment.onDirect(async (message) => {
   const { data: { text } } = message.data.content.att[0];
 
   // // Функции, которые работают с тредами.
-  // await newThread(text, teamId, to, stream, thread);
+  await threadFunction.newThread(text, teamId, to, stream, thread);
   // getAllThreads(text, teamId, to, thread);
   // renameThread(text, teamId, to, thread);
 
@@ -484,13 +491,13 @@ comment.onDirect(async (message) => {
         { streamId: checkStreamName.id },
       );
       // console.log("threads:\n", threadIn);
-      const answer = `Threads of ${checkStreamName.title} are ${threadIn.data.map(element => `\n${element.title}`)}.`;
+      const answer = `Threads of <${checkStreamName.title}> are ${threadIn.data.map(element => `\n${element.title}`)}.`;
       await botPost(teamId, to, answer);
       streamAskedForGetThreadsFlag = false;
       return;
     }
     // console.log("noDay for read")
-    const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    const answer = `There are not stream like: <${text}>. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
     await botPost(teamId, to, answer);
     return;
   }
@@ -535,14 +542,14 @@ comment.onDirect(async (message) => {
     threadInChecked = threadIn.data.find(typeUser => typeUser && typeUser.title === text);
     // console.log('threadInChecked:\n', threadInChecked);
     if (threadInChecked) {
-      const answer = `What new name do you wish to give to thread: ${threadInChecked.title}?`;
+      const answer = `What new name do you wish to give to thread: <${threadInChecked.title}>?`;
       await botPost(teamId, to, answer);
       threadCheckedNameAsked = true;
       // console.log('threadCheckedNameAsked:\n', threadCheckedNameAsked);
       streamCheckedThreadforRenameAsked = false;
       return;
     }
-    const answer = `There are not thread like: ${text} in stream: ${checkStreamName.title}. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+    const answer = `There are not thread like: <${text}> in stream: <${checkStreamName.title}>. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
     await botPost(teamId, to, answer);
     return;
   }
@@ -553,5 +560,121 @@ comment.onDirect(async (message) => {
     const answer = `Thread ${threadInChecked.title} renamed to ${text} in stream: ${checkStreamName.title}`;
     await botPost(teamId, to, answer);
     threadCheckedNameAsked = false;
+    return;
   }
-});
+  // Перемешение треда по статусам? Какой стрим?
+  if (text.match(/c t s/)) {
+    const streamsNameAndId = await nameList(teamId);
+    // console.log("users:\n", users);
+    const answer = `Where do you want to set status for thread? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer);
+    streamAskedForSetStatusThreadsFlag = true;
+    return;
+  }
+  // Проверка стрима. Какой тред переносить?
+  if (streamAskedForSetStatusThreadsFlag) {
+    const streamsNameAndId = await nameList(teamId);
+    checkStreamName = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
+    if (checkStreamName) {
+      const threadIn = await thread.read(
+        teamId,
+        { streamId: checkStreamName.id },
+      );
+      // console.log('threads:\n', threadIn);
+      const answer = `What thread do you wish to set new status in ${checkStreamName.title}? There are the threads: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+      await botPost(teamId, to, answer);
+      streamAskedForSetStatusThreadsFlag = false;
+      streamCheckedThreadforStatusAsked = true;
+      // console.log('streamCheckedThreadforRenameAsked: ', streamCheckedThreadforRenameAsked);
+      return;
+    }
+    const answer = `There are not stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer);
+    return;
+  }
+  // Проверка треда. В какой статус переносить тред?
+  if (streamCheckedThreadforStatusAsked) {
+    const threadIn = await thread.read(
+      teamId,
+      { streamId: checkStreamName.id },
+    );
+    const statusOfStream = await statusList(teamId, checkStreamName.id);
+    // console.log('threads:\n', threadIn);
+    threadInChecked = threadIn.data.find(typeUser => typeUser && typeUser.title === text);
+    // console.log('threadInChecked:\n', threadInChecked);
+    if (threadInChecked) {
+      const answer = `What new status do you wish to give to thread: ${threadInChecked.title}? Please, choose from the list:${statusOfStream.map(element => `\n${element.title}`)}`;
+      await botPost(teamId, to, answer);
+      threadCheckedStatusAsked = true;
+      // console.log('threadCheckedNameAsked:\n', threadCheckedNameAsked);
+      streamCheckedThreadforStatusAsked = false;
+      return;
+    }
+    const answer = `There are not thread like: ${text} in stream: ${checkStreamName.title}. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer);
+    return;
+  }
+  // Проверка статуса. Перенос.
+  if (threadCheckedStatusAsked) {
+    const threadIn = await thread.read(
+      teamId,
+      { streamId: checkStreamName.id },
+    );
+    const statusOfStream = await statusList(teamId, checkStreamName.id);
+    // console.log('statusOfStream:\n', statusOfStream);
+    const statusChecked = statusOfStream.find(element => element && element.title === text);
+    // console.log('statusChecked1:\n', statusChecked);
+    // console.log('threadInChecked:\n', threadInChecked);
+    if (statusChecked) {
+      // console.log('statusChecked2:\n', statusChecked);
+      // console.log('threadInChecked.id:\n', threadInChecked._id);
+      // console.log('statusChecked._id:\n', statusChecked._id);
+      await thread.setStatus(teamId, { id: threadInChecked._id, statusId: statusChecked.id });
+      const answer = `Status of thread <${threadInChecked.title}> changed to <${statusChecked.title}> in stream <${checkStreamName.title}>?`;
+      await botPost(teamId, to, answer);
+      threadCheckedStatusAsked = false;
+      return;
+    }
+    const answer = `There are not status like: ${text} in stream: <${checkStreamName.title}>. Please, type name of thread from the list: ${threadIn.data.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer);
+    return;
+  }
+  // Цензор по стоп словам. В каком стриме проверить комментарии на стоп слова?
+  if (text.match(/c c/)) {
+    const streamsNameAndId = await nameList(teamId);
+    // console.log('ok? ', 'ok');
+    const answer = `Where do you want to check comments on stop-words? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer);
+    streamAskedForCensorFlag = true;
+    return;
+  }
+  // Проверка стрима. Проверка комментариев на стоп слова. Удаление.
+  if (streamAskedForCensorFlag) {
+    const streamsNameAndId = await nameList(teamId);
+    checkStreamName = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
+    if (checkStreamName) {
+      const allComments = await comment.read(teamId, { streamId: checkStreamName.id });
+      // console.log('Last comment: ',allComments.data[6].att[0]);
+      // console.log(allComments.data);
+      // console.log('Amount of coments: ', allComments.data.length);
+      for (let i = 0; i < allComments.data.length; i += 1) {
+        if (allComments.data[i].att[0] !== undefined
+          && stopWords.indexOf(allComments.data[i].att[0].data.text) !== -1) {
+          // console.log('comment to delete: ', allComments.data[i].att[0].data.text);
+          await comment.delete(teamId, { id: allComments.data[i]._id })
+          const answer = `Comment <${allComments.data[i].att[0].data.text}> contents stop-word(s) and deleted.`;
+          await botPost(teamId, to, answer);
+          streamAskedForCensorFlag = false;
+          return;
+        }
+      }
+      const answer = 'There are no comments with stop-word(s).';
+      await botPost(teamId, to, answer);
+      streamAskedForCensorFlag = false;
+      return;
+    }
+    const answer = `There are no stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
+    await botPost(teamId, to, answer);
+  }
+  // Отправка сообщения на емайл.
+  });

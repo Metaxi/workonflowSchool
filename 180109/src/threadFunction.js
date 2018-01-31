@@ -174,4 +174,4 @@ async function renameThread(text, teamId, to, thread) {
     threadCheckedNameAsked = false;
   }
 }
-export { newThread, getAllThreads, renameThread };
+module.exports = { newThread, getAllThreads, renameThread };
