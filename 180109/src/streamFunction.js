@@ -1,5 +1,7 @@
 const common = require('./common');
 const shortid = require('shortid');
+const MongoClient = require('mongodb').MongoClient;
+const assert = require('assert');
 
 const {
   nameList,
@@ -20,27 +22,41 @@ let streamCheckedUserAskedFlag = false;
 let adminStreamAskedFlag = false;
 let userForAdminAskedFlag = false;
 
-async function streamFunction(teamId, to, text, stream, comment, contact) {
-  // help
+async function streamFunction(teamId, to, text, comment, stream, contact) {
+  // Connection URL
+  const url = 'mongodb://localhost:27017';
+  // Use connect method to connect to the server
+  const mongoConnect = await MongoClient.connect(url);
+  const db = mongoConnect.db('bot');
+  const streamCollection = db.collection('streamCollection');
+
+  //  help
   if (text.match(/help/i)) {
     const answer = 'help - show the command help\nc s - create stream (with random name)\ng l s - get last stream\ng a s - get all streams\nd a s - delete all streams\nd l s - delete last stream\nd s - delete stream (you chosen)\nr s - rename stream\nn u - new user (add to stream you chosen)';
     await botPost(teamId, to, answer, comment);
-    return;
   }
+
   // создание стрима
-  if (text.match(/c s/)) {
+  if (text.match(/s c/)) {
     const streamName = `stream_${shortid.generate()}`;
     // создание стрима
     const createdStream = await stream.create(teamId, {
       name: streamName,
     });
-    // вывод в консоль
-    // console.log('create stream:\n', createdStream)
-    // мой ответ бота
-    const answer = `Stream named ${streamName}, \nwith id ${createdStream.data.id}\nis created.`;
+    if (createdStream.code === 200) {
+      const answer = `Stream named ${streamName}, \nwith id ${createdStream.data.id}\nis created.`;
+      await botPost(teamId, to, answer, comment);
+      // mongo создание документа.
+      const streamToMongoDB = await stream.read(teamId, { id: createdStream.data.id });
+      streamCollection.insert(streamToMongoDB.data[0]);
+      // console.log('createdStreamObj.data[0]:\n', createdStreamObj.data[0]);
+      return;
+    }
+    const answer = `Some ERR: ${createdStream.message}`;
     await botPost(teamId, to, answer, comment);
     return;
   }
+
   // получение id только что созданного стрима
   if (text.match(/g l s/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -52,6 +68,7 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
     const answer = 'There are no streams to delete';
     await botPost(teamId, to, answer, comment);
   }
+
   // получение всех стримов
   if (text.match(/g a s/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -63,6 +80,7 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
     const answer = 'There are no streams to show';
     await botPost(teamId, to, answer, comment);
   }
+
   // удаление всех стримов
   if (text.match(/d a s/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -75,25 +93,43 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
         const answer = `Stream ${streamsNameAndId[i].title} is deleted`;
         await botPost(teamId, to, answer, comment);
       }
+      // mongoDB
+      await streamCollection.remove({});
+      return;
     }
     const answer = 'There are no streams to delete';
     await botPost(teamId, to, answer, comment);
   }
-  // удаление только последнего стрима. Глючит иногда
+
+  // удаление только последнего стрима.
   if (text.match(/d l s/)) {
     const streamsNameAndId = await nameList(teamId, stream);
     // console.log("streamsNameAndId:\n", streamsNameAndId.length == 0);
     if (streamsNameAndId.length !== 0) {
-      await stream.delete(teamId, {
+      const response = await stream.delete(teamId, {
         id: streamsNameAndId[streamsNameAndId.length - 1].id,
       });
-      const answer = `Stream ${streamsNameAndId[streamsNameAndId.length - 1].title} is deleted`;
+      if (response.code === 200) {
+        const answer = `Stream ${streamsNameAndId[streamsNameAndId.length - 1].title} is deleted`;
+        await botPost(teamId, to, answer, comment);
+        // mongoDB
+        const count = await streamCollection.count() - 1;
+        // console.log('count:\n', count);
+        const idToDelete = await streamCollection.find().skip(count).toArray();
+        // console.log('idToDelete:\n', idToDelete[0]._id);
+        // const streamDeleted =
+        await streamCollection.deleteOne({ _id: idToDelete[0]._id });
+        // console.log('streamDeleted:\n', streamDeleted);
+        return;
+      }
+      const answer = `Some ERR: ${response.message}`;
       await botPost(teamId, to, answer, comment);
-    } else {
-      const answer = 'There are no streams to delete';
-      await botPost(teamId, to, answer, comment);
+      return;
     }
+    const answer = 'There are no streams to delete';
+    await botPost(teamId, to, answer, comment);
   }
+
   // запрос на удаление стрима по его названию
   if (text.match(/d s/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -108,7 +144,7 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
   }
   // Удаление стрима. Ответ
   if (deleteStreamAskedFlag) {
-    // console.log("text: \n", text);
+    // console.log("inside");
     const streamsNameAndId = await nameList(teamId, stream);
     const check = streamsNameAndId.find(typeUser => typeUser && typeUser.title === text);
     // console.log('check > ', check)
@@ -122,6 +158,9 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
         const answer = `Stream named ${check.title} is deleted.`;
         await botPost(teamId, to, answer, comment);
         deleteStreamAskedFlag = false;
+        // mongoDB
+        // console.log('check.id:\n', check.id);
+        await streamCollection.deleteOne({ _id: check.id });
         return;
       }
       const answer = `Some ERR: ${response.message}`;
@@ -130,10 +169,9 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
     }
     // console.log("noDay for read")
     const answer = `There are no stream like: ${text}. Please, type name of stream from the list: ${streamsNameAndId.map(element => element.title)}.`;
-
     await botPost(teamId, to, answer, comment);
-    return;
   }
+
   // Запрос. Какой стрим переименовать?
   if (text.match(/r s/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -180,13 +218,15 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
       const answer = `Stream named ${checkStreamName.title} is renamed.`;
       await botPost(teamId, to, answer, comment);
       newNameAskedFlag = false;
+      // mongoDB
+      await streamCollection.update({ _id: checkStreamName.id }, { $set: { name: text } });
       return;
     }
     const answer = `Some ERR: ${response.message}`;
     await botPost(teamId, to, answer, comment);
     newNameAskedFlag = false;
-    return;
   }
+
   // Запрос. Выберите пользователя?
   if (text.match(/n u/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -234,6 +274,11 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
         const answer = `${checkUserInput.title} has added to ${checkStreamInput.title}.`;
         await botPost(teamId, to, answer, comment);
         streamCheckedUserAskedFlag = false;
+        // mongoDB
+        await streamCollection.update(
+          { _id: checkStreamInput.id },
+          { $push: { roles: checkUserInput.id } },
+        );
         return;
       }
       const answer = `Some ERR: ${response.message}`;
@@ -244,8 +289,8 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
     // console.log("There are no stream like this")
     const answer = `There are no user like: ${text}. Please, type name of user from the list below: ${users.map(element => `\n${element.title}`)}.`;
     await botPost(teamId, to, answer, comment);
-    return;
   }
+
   // Назначить пользователя админом стрима. Запрос. Какой стрим?
   // Запрос. Какой стрим переименовать?
   if (text.match(/a u/)) {
@@ -289,10 +334,12 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
   }
   // Получение имени и назначение админа
   if (userForAdminAskedFlag) {
+    const streamForAdmin = await stream.read(teamId, { id: checkStreamName.id });
     const usersListOfStream = await usersOfStreamList(teamId, stream, contact, checkStreamName.id);
     // проверка введенного имени на сответствие одному из списка пользователей.
     checkUserInput = usersListOfStream.find(typeUser => typeUser && typeUser.title === text);
     if (checkUserInput) {
+      console.log('checkAdmin:\n', streamForAdmin.admin.find(checkUserInput));
       // Проверка прошла успешно. Делаем пользователя админом.
       // console.log('We are inside admin Set');
       const response = await stream.setAdmin(teamId, {
@@ -303,6 +350,18 @@ async function streamFunction(teamId, to, text, stream, comment, contact) {
         const answer = `User ${checkUserInput.title} has become the admin of ${checkStreamName.title}.`;
         await botPost(teamId, to, answer, comment);
         newNameAskedFlag = false;
+        // mongoDB
+        const checkAdmin = await streamCollection.find({
+          _id: checkStreamName.id,
+          admins: checkUserInput.id,
+        }).toArray();
+        console.log('checkAdmin:\n', checkAdmin);
+        if (checkAdmin.length === 0) {
+          await streamCollection.update(
+            { _id: checkStreamName.id },
+            { $push: { admins: checkUserInput.id } },
+          );
+        }
         return;
       }
       const answer = `Some ERR: ${response.message}`;

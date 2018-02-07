@@ -77,7 +77,9 @@ async function usersOfStreamList(teamId, stream, contact, streamId) {
     });
     // console.log("checkIdReturnName 1:\n", checkIdReturnName);
     for (let k = 0; k < checkIdReturnName.length; k += 1) {
-      if (checkIdReturnName[k] != null) {
+      // console.log('checkIdReturnName[k] ', checkIdReturnName[k])
+      if (checkIdReturnName[k].length !== 0) {
+        // console.log('checkIdReturnName[k]:\n', checkIdReturnName[k]);
         checkedIdName.push(checkIdReturnName[k]);
         // console.log("checkedIdName 1:\n", checkedIdName)
       }

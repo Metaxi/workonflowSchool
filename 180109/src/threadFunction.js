@@ -1,4 +1,6 @@
 const common = require('./common');
+const MongoClient = require('mongodb').MongoClient;
+const assert = require('assert');
 
 const { nameList, botPost, statusList } = common;
 
@@ -15,6 +17,13 @@ let streamCheckedThreadforStatusAsked = false;
 let threadCheckedStatusAsked = false;
 
 async function threadFunction(text, teamId, to, stream, thread, comment, status) {
+  // Connection URL
+  const url = 'mongodb://localhost:27017';
+  // Use connect method to connect to the server
+  const mongoConnect = await MongoClient.connect(url);
+  const db = mongoConnect.db('bot');
+  const threadCollection = db.collection('threadCollection');
+
   // создание треда. В каком стриме?
   if (text.match(/t n/)) {
     const streamsNameAndId = await nameList(teamId, stream);
@@ -58,15 +67,22 @@ async function threadFunction(text, teamId, to, stream, thread, comment, status)
       deadline: [null, 1231231231231],
       responsibleUserId: '5a3a587b19e9f8001fb1bf8b',
     });
-    // console.log('threadCreate: ', threadCreate);
-    const threadIn = await thread.read(
-      teamId,
-      { id: threadCreate.data },
-    );
-    // console.log('thread: ', threadIn.data[0].title);
-    const answer = `Thread <${threadIn.data[0].title}> is created in stream <${checkStreamName.title}>.`;
+    if (threadCreate.code === 200) {
+      // console.log('threadCreate: ', threadCreate);
+      const threadIn = await thread.read(
+        teamId,
+        { id: threadCreate.data },
+      );
+      // console.log('thread: ', threadIn.data[0].title);
+      const answer = `Thread <${threadIn.data[0].title}> is created in stream <${checkStreamName.title}>.`;
+      await botPost(teamId, to, answer, comment);
+      streamCheckedThreadNameAsked = false;
+      // mongoDB
+
+      return;
+    }
+    const answer = `Some ERR: ${threadCreate.message}`;
     await botPost(teamId, to, answer, comment);
-    return;
   }
 
   // Вывод списка тредов. Какой стрим?
@@ -100,7 +116,7 @@ async function threadFunction(text, teamId, to, stream, thread, comment, status)
   }
 
   // Переименование треда. Какой стрим?
-  if (text.match(/t n/)) {
+  if (text.match(/t r/)) {
     const streamsNameAndId = await nameList(teamId, stream);
     // console.log("users:\n", users);
     const answer = `Where do you want to rename thread? Choose stream from list, please. ${streamsNameAndId.map(element => `\n${element.title}`)}.`;

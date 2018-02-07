@@ -24,9 +24,11 @@ comment.onDirect(async (message) => {
   const { data: { text } } = message.data.content.att[0];
 
   // Функции работы с стримами
-  await streamFunction(teamId, to, text, stream, comment, contact);
+  await streamFunction(teamId, to, text, comment, stream, contact);
+
   // Функции для работы с тредами
   await threadFunction(text, teamId, to, stream, thread, comment, status);
+
   // Цензор по стоп словам. В каком стриме проверить комментарии на стоп слова?
   await censor(text, teamId, to, comment, stream);
 });
