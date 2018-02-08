@@ -339,39 +339,46 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
     // проверка введенного имени на сответствие одному из списка пользователей.
     checkUserInput = usersListOfStream.find(typeUser => typeUser && typeUser.title === text);
     if (checkUserInput) {
-      console.log('checkAdmin:\n', streamForAdmin.admin.find(checkUserInput));
-      // Проверка прошла успешно. Делаем пользователя админом.
-      // console.log('We are inside admin Set');
-      const response = await stream.setAdmin(teamId, {
-        id: checkStreamName.id,
-        userId: checkUserInput.id,
-      });
-      if (response.code === 200) {
-        const answer = `User ${checkUserInput.title} has become the admin of ${checkStreamName.title}.`;
-        await botPost(teamId, to, answer, comment);
-        newNameAskedFlag = false;
-        // mongoDB
-        const checkAdmin = await streamCollection.find({
-          _id: checkStreamName.id,
-          admins: checkUserInput.id,
-        }).toArray();
-        console.log('checkAdmin:\n', checkAdmin);
-        if (checkAdmin.length === 0) {
-          await streamCollection.update(
-            { _id: checkStreamName.id },
-            { $push: { admins: checkUserInput.id } },
-          );
+      const checker = streamForAdmin.data[0].admins.find(element => element === checkUserInput.id);
+      if (!checker) {
+        // console.log('checkUserInput.id ==\n', checker);
+        // Проверка прошла успешно. Делаем пользователя админом.
+        // console.log('We are inside admin Set');
+        const response = await stream.setAdmin(teamId, {
+          id: checkStreamName.id,
+          userId: checkUserInput.id,
+        });
+        if (response.code === 200) {
+          const answer = `User ${checkUserInput.title} has become the admin of ${checkStreamName.title}.`;
+          await botPost(teamId, to, answer, comment);
+          newNameAskedFlag = false;
+          // mongoDB
+          const checkAdmin = await streamCollection.find({
+            _id: checkStreamName.id,
+            admins: checkUserInput.id,
+          }).toArray();
+          // console.log('checkAdmin:\n', checkAdmin);
+          if (checkAdmin.length === 0) {
+            await streamCollection.update(
+              { _id: checkStreamName.id },
+              { $push: { admins: checkUserInput.id } },
+            );
+          }
+          return;
         }
+        const answer = `Some ERR: ${response.message}`;
+        await botPost(teamId, to, answer, comment);
+        userForAdminAskedFlag = false;
         return;
       }
-      const answer = `Some ERR: ${response.message}`;
+      const answer = `There is admin like ${text} in ${checkStreamName.title}.`;
       await botPost(teamId, to, answer, comment);
-      userForAdminAskedFlag = false;
       return;
     }
     const answer = `There are no users like ${text} in ${checkStreamName.title}. Please, choose user from the list: ${usersListOfStream.map(element => `\n${element.title}`)}`;
     await botPost(teamId, to, answer, comment);
   }
+  // console.log([4, 6, 8, 12].find(element => element && element === 6));
 }
 
 module.exports = streamFunction;
