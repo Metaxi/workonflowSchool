@@ -29,6 +29,7 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
   const mongoConnect = await MongoClient.connect(url);
   const db = mongoConnect.db('bot');
   const streamCollection = db.collection('streamCollection');
+  const threadCollection = db.collection('threadCollection');
 
   //  help
   if (text.match(/help/i)) {
@@ -37,11 +38,19 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
   }
 
   // создание стрима
-  if (text.match(/s c/)) {
+  if (text.match(/s n/)) {
     const streamName = `stream_${shortid.generate()}`;
     // создание стрима
     const createdStream = await stream.create(teamId, {
       name: streamName,
+      settings: {
+        widgets:
+          {
+            Priority: { on: true, type: 'Priority' },
+            DataTime: { on: true, type: 'DataTime' },
+            Resposible: { on: true, type: 'Resposible' },
+          },
+      },
     });
     if (createdStream.code === 200) {
       const answer = `Stream named ${streamName}, \nwith id ${createdStream.data.id}\nis created.`;
@@ -49,7 +58,7 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
       // mongo создание документа.
       const streamToMongoDB = await stream.read(teamId, { id: createdStream.data.id });
       streamCollection.insert(streamToMongoDB.data[0]);
-      // console.log('createdStreamObj.data[0]:\n', createdStreamObj.data[0]);
+      console.log('streamToMongoDB.settings:\n', streamToMongoDB.settings);
       return;
     }
     const answer = `Some ERR: ${createdStream.message}`;
@@ -95,6 +104,7 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
       }
       // mongoDB
       await streamCollection.remove({});
+      await threadCollection.remove({});
       return;
     }
     const answer = 'There are no streams to delete';
@@ -116,9 +126,9 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
         const count = await streamCollection.count() - 1;
         // console.log('count:\n', count);
         const idToDelete = await streamCollection.find().skip(count).toArray();
-        // console.log('idToDelete:\n', idToDelete[0]._id);
-        // const streamDeleted =
+        console.log('idToDelete[0]._id:\n', idToDelete[0]._id);
         await streamCollection.deleteOne({ _id: idToDelete[0]._id });
+        await threadCollection.deleteMany({ streamId: idToDelete[0]._id });
         // console.log('streamDeleted:\n', streamDeleted);
         return;
       }
