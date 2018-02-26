@@ -1,0 +1,28 @@
+{
+  "name": "180109",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "WS_ENDPOINT=https://ws-bots.teslatele.com nodemon index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "assert": "^1.4.1",
+    "bot-client": "git+https://github.com/xenbyte/bot-client.git",
+    "eslint": "^4.16.0",
+    "eslint-config-airbnb": "^16.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3",
+    "eslint-plugin-react": "^7.5.1",
+    "mongodb": "^3.0.2",
+    "nodemon": "^1.14.11",
+    "shortid": "^2.2.8",
+    "threads": "^0.10.1"
+  },
+  "devDependencies": {
+    "eslint": "^4.17.0"
+  },
+  "description": ""
+}
