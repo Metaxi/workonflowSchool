@@ -7,12 +7,35 @@ const { translator, botPost } = common;
 let askedLangFrom = false;
 let askedLangTo = false;
 let setTranslator = true;
+let firstHelp = true;
 
 async function direct(userId, teamId, to, comment, streamId, threadId, text, userCollection) {
   // mongodb, создание объекта с настройками по умолчанию.
   const userSettingDefault = await userCollection.find({ user: userId }).toArray();
   if (userSettingDefault.length === 0) {
     await userCollection.insert({ user: userId, from: 'auto', to: 'en' });
+  }
+  // Первая помощь.
+  if (firstHelp) {
+    const userSetting = await userCollection.find({ user: userId }).toArray();
+    const rawLangs = Object.entries(langs);
+    const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
+    const [, toSetHuman] = langKeysValues.find(element =>
+      element && element[0] === userSetting[0].to);
+    const [, fromSetHuman] = langKeysValues.find(element =>
+      element && element[0] === userSetting[0].from);
+    const answer = `Short keys to set bot up.
+    t h - (translator help) show this manual.
+    t s s - (translator source set) set source language of bot translator.
+    t t s - (translator target set) set target language of bot translator.
+    t c s - (translator current settings) show current language settings.
+    And current bot translator settings are
+      source language is <${fromSetHuman}>,
+      target language is <${toSetHuman}>.
+    \nAnd translation of your input:
+    \n`;
+    await botPost(teamId, to, comment, streamId, threadId, answer);
+    firstHelp = false;
   }
   // Мануал
   if (text.match(/t h/i)) {
