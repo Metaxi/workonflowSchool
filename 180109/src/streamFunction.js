@@ -1,7 +1,7 @@
 const common = require('./common');
 const shortid = require('shortid');
-const MongoClient = require('mongodb').MongoClient;
-const assert = require('assert');
+const { MongoClient } = require('mongodb').MongoClient;
+// const assert = require('assert');
 
 const {
   nameList,
@@ -58,7 +58,7 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
       // mongo создание документа.
       const streamToMongoDB = await stream.read(teamId, { id: createdStream.data.id });
       streamCollection.insert(streamToMongoDB.data[0]);
-      console.log('streamToMongoDB.settings:\n', streamToMongoDB.settings);
+      // console.log('streamToMongoDB.settings:\n', streamToMongoDB.settings);
       return;
     }
     const answer = `Some ERR: ${createdStream.message}`;
