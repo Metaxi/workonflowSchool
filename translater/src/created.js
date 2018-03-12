@@ -24,8 +24,11 @@ async function created(
     // const emailBody = message.data.content.att[0].data.text;
     const userSettings = await userCollection.find({ user: userId }).toArray();
     // console.log('userSettings[0]:\n', userSettings[0]);
-    const fromSet = userSettings[0].from;
-    const toSet = userSettings[0].to;
+    const streamSettings = await userSettings[0]
+      .streams.find(element => element && element.idStream === streamId);
+    console.log('streamSettings:\n', streamSettings);
+    const fromSet = streamSettings.from;
+    const toSet = streamSettings.to;
     const answer = await translator(text, fromSet, toSet);
     await botPost(teamId, to, comment, streamId, threadId, answer);
   }

@@ -7,7 +7,7 @@ const app = require('./src/index');
 const {
   creds, direct, mention, created,
 } = app;
-const { comment, mail } = botClient.connect(creds);
+const { comment, mail, stream } = botClient.connect(creds);
 
 // основное тело программы
 comment.onDirect(async (message) => {
@@ -26,11 +26,12 @@ comment.onDirect(async (message) => {
   const userCollection = db.collection('userCollection');
 
   // Функция, которая все делает в чате с ботом.
-  direct(userId, teamId, to, comment, streamId, threadId, text, userCollection);
+  direct(userId, teamId, to, comment, streamId, threadId, text, userCollection, stream);
 });
 
 comment.onMention(async (message) => {
   const { teamId } = message;
+  // console.log('mes:\n', message);
   const { streamId } = message.data.content;
   const { threadId } = message.data.content;
   const { userId } = message.data;
@@ -44,7 +45,7 @@ comment.onMention(async (message) => {
   const db = mongoConnect.db('translator');
   const userCollection = db.collection('userCollection');
 
-  mention(userId, teamId, to, comment, streamId, threadId, mail, text, userCollection);
+  mention(userId, teamId, to, comment, streamId, threadId, mail, text, userCollection, stream);
 });
 
 comment.onCreated(async (message) => {

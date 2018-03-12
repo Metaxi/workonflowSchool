@@ -74,7 +74,7 @@ async function streamFunction(teamId, to, text, comment, stream, contact) {
       await botPost(teamId, to, answer, comment);
       return;
     }
-    const answer = 'There are no streams to delete';
+    const answer = 'There are no last stream';
     await botPost(teamId, to, answer, comment);
   }
 
