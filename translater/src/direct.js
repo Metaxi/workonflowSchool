@@ -7,10 +7,10 @@ const { translator, botPost, nameList } = common;
 let askedLangFrom = false;
 let askedLangTo = false;
 let setTranslator = true;
-const firstHelp = true;
-let setLangStreamAskedFlag = false;
-const streamCheckedTargetAsked = false;
-let streamCheckedTargetAsked2 = false;
+// const firstHelp = true;
+// let setLangStreamAskedFlag = false;
+// const streamCheckedTargetAsked = false;
+// let streamCheckedTargetAsked2 = false;
 
 async function direct(
   userId,
@@ -58,8 +58,8 @@ async function direct(
   if (text.match(/t h/i)) {
     setTranslator = false;
     const answer = `t h (translator help) - show this manual.
-    \nt s s (translator source set) - set source language of bot translator.
-    \nt t s (translator target set) - set target language of bot translator.
+    \nt s l (translator source set) - set source language of bot translator.
+    \nt t l (translator target set) - set target language of bot translator.
     \nt c s (translator current settings) - show current language settings.`;
     await botPost(teamId, to, comment, streamId, threadId, answer);
     setTranslator = true;
@@ -90,7 +90,7 @@ async function direct(
     askedLangFrom = true;
     return;
   }
-  // Проверка введенного языка
+  // Проверка введенного языка. Установка языка источника.
   if (askedLangFrom) {
     const rawLangs = Object.entries(langs);
     const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
@@ -123,7 +123,7 @@ async function direct(
     askedLangTo = true;
     return;
   }
-  // Проверка введенного языка
+  // Проверка введенного языка. Установка целевого языка.
   if (askedLangTo) {
     // console.log('langKeysValues:\n', langKeysValues);
     const rawLangs = Object.entries(langs);
@@ -158,69 +158,6 @@ async function direct(
     const answer = await translator(text, fromSet, toSet);
     await botPost(teamId, to, comment, streamId, threadId, answer);
   }
-
-  // if (text.match(/t s s/i)) {
-  //   setTranslator = false;
-  //   const streamsNameAndId = await nameList(teamId, stream, userId);
-  //   // console.log('streamsNameAndId >>> ', streamsNameAndId)
-  //   const answer = `In which stream do you want to translate e-mail messages? Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}`;
-  //   await botPost(teamId, to, comment, streamId, threadId, answer);
-  //
-  //   setLangStreamAskedFlag = true;
-  //   return;
-  // }
-  // Удаление стрима. Ответ
-  if (setLangStreamAskedFlag) {
-    // console.log("inside");
-    const streamsNameAndId = await nameList(teamId, stream, userId);
-    const check = streamsNameAndId.find(element => element && element.title === text);
-    console.log('check \t', check);
-    if (check) {
-      const rawLangs = Object.entries(langs);
-      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-      // console.log("Text of deleting stream is correct!")
-      // console.log("streamNameToDelete > ", text)
-      const userSettings = await userCollection
-        .find({
-          user: userId,
-          streams: { $elemMatch: { idStream: check.id } },
-        })
-        .toArray();
-      console.log('userSettings:\n', userSettings);
-      if (userSettings.length === 0) {
-        await userCollection.update(
-          { user: userId },
-          {
-            $push: {
-              streams: {
-                idStream: check.id,
-                nameStream: check.title,
-                from: 'auto',
-                to: 'en',
-                flag: false,
-              },
-            },
-          },
-          true,
-        );
-        const response = await userCollection.find({ user: userId }).toArray();
-        console.log('response:\n', response);
-        const answer = `What target language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
-        await botPost(teamId, to, comment, streamId, threadId, answer);
-        streamCheckedTargetAsked2 = true;
-        return;
-      }
-      streamCheckedTargetAsked2 = true;
-      return;
-    }
-    // console.log("noDay for read")
-    const answer = `There are no stream like: <${text}>. Please, type name of stream from the list: ${streamsNameAndId.map(element => `\n${element.title}`)}.`;
-    await botPost(teamId, to, comment, streamId, threadId, answer);
-    return;
-  }
-  // if (streamCheckedTargetAsked2) {
-  //
-  // }
 }
 
 module.exports = direct;
