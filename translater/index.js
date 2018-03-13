@@ -24,9 +24,22 @@ comment.onDirect(async (message) => {
   const mongoConnect = await MongoClient.connect(url);
   const db = mongoConnect.db('translator');
   const userCollection = db.collection('userCollection');
+  const botCollection = db.collection('botCollection');
 
-  // Функция, которая работает в чате с ботом. Выводит помощь, настройки языка, устанавливает языки, переводит.
-  direct(userId, teamId, to, comment, streamId, threadId, text, userCollection, stream);
+  // Функция, которая работает в чате с ботом.
+  // Выводит помощь, настройки языка, устанавливает языки, переводит.
+  direct(
+    userId,
+    teamId,
+    to,
+    comment,
+    streamId,
+    threadId,
+    text,
+    userCollection,
+    botCollection,
+    stream,
+  );
 });
 
 comment.onMention(async (message) => {
@@ -44,8 +57,21 @@ comment.onMention(async (message) => {
   const mongoConnect = await MongoClient.connect(url);
   const db = mongoConnect.db('translator');
   const userCollection = db.collection('userCollection');
+  const botCollection = db.collection('botCollection');
   // Функция, которая переводит при упоминании бота, а также устанавливает языки.
-  mention(userId, teamId, to, comment, streamId, threadId, mail, text, userCollection, stream);
+  mention(
+    userId,
+    teamId,
+    to,
+    comment,
+    streamId,
+    threadId,
+    mail,
+    text,
+    userCollection,
+    botCollection,
+    stream,
+  );
 });
 
 comment.onCreated(async (message) => {

@@ -4,9 +4,6 @@ const common = require('./common');
 
 const { translator, botPost, nameList } = common;
 
-let askedLangFrom = false;
-let askedLangTo = false;
-let setTranslator = true;
 // const firstHelp = true;
 // let setLangStreamAskedFlag = false;
 // const streamCheckedTargetAsked = false;
@@ -21,9 +18,10 @@ async function direct(
   threadId,
   text,
   userCollection,
+  botCollection,
   stream,
 ) {
-  // mongodb, создание объекта с настройками по умолчанию.
+  // mongodb, создание объекта с настройками языка для пользователя по умолчанию.
   const userSettingDefault = await userCollection.find({ user: userId }).toArray();
   if (userSettingDefault.length === 0) {
     await userCollection.insert({
@@ -33,6 +31,22 @@ async function direct(
       streams: [],
     });
   }
+  // mongodb. Создание объекта с картой состояний бота для пользователя по умолчанию.
+  let botSetting = await botCollection.find({ user: userId }).toArray();
+  console.log('botSetting:\n', botSetting);
+  if (botSetting.length === 0) {
+    await botCollection.insert({
+      user: userId,
+      general: false,
+      translate: true,
+      help: false,
+      current: false,
+      source: false,
+      target: false,
+      streams: [],
+    });
+  }
+
   // Первая помощь.
   // if (firstHelp) {
   //   const userSetting = await userCollection.find({ user: userId }).toArray();
@@ -53,45 +67,68 @@ async function direct(
   //   await botPost(teamId, to, comment, streamId, threadId, answer);
   //   firstHelp = false;
   // }
-
-  // Мануал
   if (text.match(/t h/i)) {
-    setTranslator = false;
-    const answer = `t h (translator help) - show this manual.
-    \nt s l (translator source set) - set source language of bot translator.
-    \nt t l (translator target set) - set target language of bot translator.
-    \nt c s (translator current settings) - show current language settings.`;
-    await botPost(teamId, to, comment, streamId, threadId, answer);
-    setTranslator = true;
-    return;
+    if (!botSetting[0].general && !botSetting[0].help) {
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: true, help: true, translate: false } },
+      );
+      // Мануал
+      const answer = 't h (translator help) - show this manual.\nt s l (translator source set) - set source language of bot translator.\nt t l (translator target set) - set target language of bot translator.\nt c s (translator current settings) - show current language settings.';
+      await botPost(teamId, to, comment, streamId, threadId, answer);
+      // Монго, снятие флага.
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: false, help: false, translate: true } },
+      );
+      return;
+    }
   }
 
   // Какие настройки сейчас?
   if (text.match(/t c s/i)) {
-    setTranslator = false;
-    const userSetting = await userCollection.find({ user: userId }).toArray();
-    const rawLangs = Object.entries(langs);
-    const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-    const [, toSetHuman] = langKeysValues.find(element => element && element[0] === userSetting[0].to);
-    const [, fromSetHuman] = langKeysValues.find(element => element && element[0] === userSetting[0].from);
-    const answer = `Current bot translator settings. \nSource language is ${fromSetHuman},\ntarget language is ${toSetHuman}.`;
-    await botPost(teamId, to, comment, streamId, threadId, answer);
-    setTranslator = true;
-    return;
+    if (!botSetting[0].general && !botSetting[0].current) {
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: true, current: true, translate: false } },
+      );
+      // Какие настройки сейчас?
+      const userSetting = await userCollection.find({ user: userId }).toArray();
+      const rawLangs = Object.entries(langs);
+      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
+      const [, toSetHuman] = langKeysValues.find(element => element && element[0] === userSetting[0].to);
+      const [, fromSetHuman] = langKeysValues.find(element => element && element[0] === userSetting[0].from);
+      const answer = `Current bot translator settings. \nSource language is ${fromSetHuman},\ntarget language is ${toSetHuman}.`;
+      await botPost(teamId, to, comment, streamId, threadId, answer);
+      // mongodb, снятие флага.
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: false, current: false, translate: true } },
+      );
+      return;
+    }
   }
 
   // translate bot settings. С какого языка?
   if (text.match(/t s l/i)) {
-    setTranslator = false;
-    const rawLangs = Object.entries(langs);
-    const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-    const answer = `What source language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
-    await botPost(teamId, to, comment, streamId, threadId, answer);
-    askedLangFrom = true;
-    return;
+    // Mongo. Установка флага состояния.
+    // mongodb, set flag.
+    if (!botSetting[0].general) {
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: true, translate: false } },
+      );
+      const rawLangs = Object.entries(langs);
+      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
+      const answer = `What source language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
+      await botPost(teamId, to, comment, streamId, threadId, answer);
+      // mongo set flag
+      botSetting = await botCollection.update({ user: userId }, { $set: { source: true } });
+      return;
+    }
   }
   // Проверка введенного языка. Установка языка источника.
-  if (askedLangFrom) {
+  if (botSetting[0].general && botSetting[0].source) {
     const rawLangs = Object.entries(langs);
     const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
     // console.log('langKeysValues:\n', langKeysValues);
@@ -105,26 +142,37 @@ async function direct(
       await botPost(teamId, to, comment, streamId, threadId, answer);
       // mongo создание документа.
       userCollection.updateOne({ user: userId }, { $set: { from: fromSet } });
-      setTranslator = true;
-      askedLangFrom = false;
+      // mongodb, set flag.
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: false, source: false, translate: true } },
+      );
       return;
     }
     const answer = `<${text}> is not correct input for me (bot). Please, send me correct name of language exactly from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
     await botPost(teamId, to, comment, streamId, threadId, answer);
+    return;
   }
 
   // translate bot settings. На какой язык?
   if (text.match(/t t l/i)) {
-    setTranslator = false;
-    const rawLangs = Object.entries(langs);
-    const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-    const answer = `What target language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
-    await botPost(teamId, to, comment, streamId, threadId, answer);
-    askedLangTo = true;
-    return;
+    // mongodb, set flag.
+    if (!botSetting[0].general) {
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: true, translate: false } },
+      );
+      const rawLangs = Object.entries(langs);
+      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
+      const answer = `What target language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
+      await botPost(teamId, to, comment, streamId, threadId, answer);
+      // mongodb, set flag.
+      botSetting = await botCollection.update({ user: userId }, { $set: { target: true } });
+      return;
+    }
   }
   // Проверка введенного языка. Установка целевого языка.
-  if (askedLangTo) {
+  if (botSetting[0].general && botSetting[0].target) {
     // console.log('langKeysValues:\n', langKeysValues);
     const rawLangs = Object.entries(langs);
     const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
@@ -138,16 +186,20 @@ async function direct(
       await botPost(teamId, to, comment, streamId, threadId, answer);
       // mongodb
       userCollection.updateOne({ user: userId }, { $set: { to: toSet } });
-      setTranslator = true;
-      askedLangTo = false;
+      // mongodb, set flag.
+      botSetting = await botCollection.update(
+        { user: userId },
+        { $set: { general: false, target: false, translate: true } },
+      );
       return;
     }
     const answer = `<${text}> is not correct input for me (bot). Please, send me correct name of language exactly from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
     await botPost(teamId, to, comment, streamId, threadId, answer);
+    return;
   }
 
   // переводчик
-  if (setTranslator) {
+  if (botSetting[0].translate) {
     // Если в монго установлены языки для данного пользователя, то берем параметры оттуда.
     const userSettings = await userCollection.find({ user: userId }).toArray();
     // console.log('isObject[0]:\n', isObject[0]);

@@ -17,25 +17,31 @@ async function mention(
   mail,
   text,
   userCollection,
+  botCollection,
   stream,
 ) {
   // mongodb, создание объекта с настройками по умолчанию, если нету.
   const userSettingDefault = await userCollection.find({ user: userId }).toArray();
   if (userSettingDefault.length === 0) {
-    await userCollection.insert({ user: userId, from: 'auto', to: 'en' });
+    await userCollection.insert({
+      user: userId,
+      from: 'auto',
+      to: 'en',
+      streams: [],
+    });
   }
   // mongodb. Создание настроек по умолчание в стриме. Не работают, так как флаг = 0
   // По сути создается шаблон для обновления.
   const streamsNameAndId = await nameList(teamId, stream, userId);
   const check = streamsNameAndId.find(element => element && element.id === streamId);
   // console.log('check: \n', check);
-  const streamSettingDefault = await userCollection
+  const userStreamSettingDefault = await userCollection
     .find({
       user: userId,
       streams: { $elemMatch: { idStream: check.id } },
     })
     .toArray();
-  if (streamSettingDefault.length === 0) {
+  if (userStreamSettingDefault.length === 0) {
     await userCollection.update(
       { user: userId },
       {
@@ -43,7 +49,7 @@ async function mention(
           streams: {
             idStream: check.id,
             nameStream: check.title,
-            from: 'Auto',
+            from: 'auto',
             to: 'en',
             flag: false,
           },
@@ -51,8 +57,37 @@ async function mention(
       },
       true,
     );
-    const response = await userCollection.find({ user: userId }).toArray();
-    console.log('response:\n', response);
+    const responseUser = await userCollection.find({ user: userId }).toArray();
+    console.log('response2:\n', responseUser[0].streams[0]);
+    return;
+  }
+
+  const botStreamSettingDefault = await botCollection
+    .find({
+      user: userId,
+      streams: { $elemMatch: { idStream: check.id } },
+    })
+    .toArray();
+  console.log('botStreamSettingDefault:\n', botStreamSettingDefault);
+  if (botStreamSettingDefault.length === 0) {
+    await botCollection.update(
+      { user: userId },
+      {
+        $push: {
+          streams: {
+            idStream: check.id,
+            nameStream: check.title,
+            general: false,
+            translate: true,
+            source: false,
+            target: false,
+          },
+        },
+      },
+      true,
+    );
+    const responseBot = await botCollection.find({ user: userId }).toArray();
+    console.log('response:\n', responseBot);
     return;
   }
 
