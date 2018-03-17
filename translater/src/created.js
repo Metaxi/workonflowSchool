@@ -26,7 +26,7 @@ async function created(
     // console.log('userSettings[0]:\n', userSettings[0]);
     const streamSettings = await userSettings[0]
       .streams.find(element => element && element.idStream === streamId);
-    console.log('streamSettings:\n', streamSettings);
+    // console.log('streamSettings:\n', streamSettings);
     const fromSet = streamSettings.from;
     const toSet = streamSettings.to;
     const answer = await translator(text, fromSet, toSet);

@@ -3,10 +3,6 @@ const common = require('./common');
 
 const { translator, botPost, nameList } = common;
 
-let setTranslator = true;
-let askedLangFrom = false;
-let askedLangTo = false;
-
 async function mention(
   userId,
   teamId,
@@ -20,7 +16,10 @@ async function mention(
   botCollection,
   stream,
 ) {
-  // mongodb, создание объекта с настройками по умолчанию, если нету.
+  // Get list of langs
+  const rawLangs = Object.entries(langs);
+  const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
+  // mongodb, create default lang object for general settings
   const userSettingDefault = await userCollection.find({ user: userId }).toArray();
   if (userSettingDefault.length === 0) {
     await userCollection.insert({
@@ -30,9 +29,8 @@ async function mention(
       streams: [],
     });
   }
-  // mongodb. Создание настроек по умолчание в стриме. Не работают, так как флаг = 0
-  // По сути создается шаблон для обновления.
   const streamsNameAndId = await nameList(teamId, stream, userId);
+  // current stream is your as admin stream
   const check = streamsNameAndId.find(element => element && element.id === streamId);
   // console.log('check: \n', check);
   const userStreamSettingDefault = await userCollection
@@ -41,6 +39,7 @@ async function mention(
       streams: { $elemMatch: { idStream: check.id } },
     })
     .toArray();
+    // mongodb. create default lang object for stream settings. Не работают, так как флаг = 0
   if (userStreamSettingDefault.length === 0) {
     await userCollection.update(
       { user: userId },
@@ -57,19 +56,31 @@ async function mention(
       },
       true,
     );
-    const responseUser = await userCollection.find({ user: userId }).toArray();
-    console.log('response2:\n', responseUser[0].streams[0]);
     return;
   }
-
-  const botStreamSettingDefault = await botCollection
+  // mongodb. create default state object for general settings for the stream.
+  const botGeneralSetting = await botCollection.find({ user: userId }).toArray();
+  // console.log('botStreamSetting:\n', botStreamSetting);
+  if (botGeneralSetting.length === 0) {
+    await botCollection.insert({
+      user: userId,
+      general: false,
+      translate: true,
+      help: false,
+      current: false,
+      source: false,
+      target: false,
+      streams: [],
+    });
+  }
+  let botStreamSetting = await botCollection
     .find({
       user: userId,
       streams: { $elemMatch: { idStream: check.id } },
     })
     .toArray();
-  console.log('botStreamSettingDefault:\n', botStreamSettingDefault);
-  if (botStreamSettingDefault.length === 0) {
+  // mongodb. create default state object settings for the stream.
+  if (botStreamSetting.length === 0) {
     await botCollection.update(
       { user: userId },
       {
@@ -86,8 +97,6 @@ async function mention(
       },
       true,
     );
-    const responseBot = await botCollection.find({ user: userId }).toArray();
-    console.log('response:\n', responseBot);
     return;
   }
 
@@ -97,16 +106,24 @@ async function mention(
   }
 
   if (isBlank(text.split('@')[2])) {
-    // console.log('[2] is empty');
-    // const emails = await mail.read(teamId, {});
-    // const emailBody = emails.data.find(element => element && element.threadId === threadId).text;
-    // // console.log('emailBody:\n', emailBody);
-    // const userSettings = await userCollection.find({ user: userId }).toArray();
-    // // console.log('userSettings[0]:\n', userSettings[0]);
-    // const fromSet = userSettings[0].from;
-    // const toSet = userSettings[0].to;
-    // const answer = await translator(emailBody, fromSet, toSet);
-    const answer = 'What do you mean?';
+    console.log('[2] is empty');
+    console.log('threadId:\n', threadId);
+    const emails = await mail.read(teamId, {});
+    // console.log('emails\n', emails);
+    const emailBody = emails.data.find(element => element && element.threadId === threadId).text;
+    console.log('emailBody:\n', emailBody);
+    if (threadId && emailBody) {
+      // берем настройки из mongodb
+      const userSettings = await userCollection
+        .find({}, { user: userId, streams: { $elemMatch: { idStream: check.id } } })
+        .toArray();
+      // console.log('userSettings[0].streams[0]\n', userSettings[0].streams[0]);
+      const fromSet = userSettings[0].streams[0].from;
+      const toSet = userSettings[0].streams[0].to;
+      const answer = await translator(emailBody, fromSet, toSet);
+      await botPost(teamId, to, comment, streamId, threadId, answer);
+    }
+    const answer = 'There are no emails with text in the chat. Please, mention me in the thread where text in email is.';
     await botPost(teamId, to, comment, streamId, threadId, answer);
   } else {
     // если при упоминании бота строка сообщение не пустое, то либо настройки, либо перевод.
@@ -115,98 +132,106 @@ async function mention(
     const textBodyTrimmed = textBody.trim();
     // console.log('textBody1:\n', `<${textBody}>`);
     // Какие настройки сейчас?
-    if (text.match(/t c s/i)) {
-      setTranslator = false;
-      // берем настройки из mongodb
-      const userSettings = await userCollection
-        .find({}, { user: userId, streams: { $elemMatch: { idStream: check.id } } })
-        .toArray();
-      const rawLangs = Object.entries(langs);
-      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-      const [, toSetHuman] = langKeysValues
-        .find(element => element && element[0] === userSettings[0].streams[0].to);
-      const [, fromSetHuman] = langKeysValues
-        .find(element => element && element[0] === userSettings[0].streams[0].from);
-      const answer = `Current bot translator settings. \nSource language is ${fromSetHuman},\ntarget language is ${toSetHuman}.`;
-      await botPost(teamId, to, comment, streamId, threadId, answer);
-      setTranslator = true;
-      return;
-    }
-    // код отправить в ответ сообщение "привет"
-    if (textBody.match(/t s l/)) {
-      setTranslator = false;
-      const rawLangs = Object.entries(langs);
-      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-      const answer = `What source language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
-      await botPost(teamId, to, comment, streamId, threadId, answer);
-      askedLangFrom = true;
-      return;
-    }
-    if (askedLangFrom) {
-      const rawLangs = Object.entries(langs);
-      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-      // console.log('langKeysValues:\n', langKeysValues);
-      // console.log('textBody2:\n', `<${textBody.trim()}>`);
-      const checkedFromLanguage = langKeysValues.find(element => element && element[1] === textBodyTrimmed);
-      // console.log('checkedFromLanguage: ', checkedFromLanguage);
-      if (checkedFromLanguage) {
-        const [fromSet] = checkedFromLanguage;
-        // console.log('fromSet: ', fromSet);
-        // console.log('toSet: ', toSet);
-        const answer = `Source language is changed to ${fromSet}`;
-        await botPost(teamId, to, comment, streamId, threadId, answer);
-        // mongo создание документа.
-        await userCollection.update(
-          { user: userId, 'streams.idStream': check.id },
-          { $set: { 'streams.$.from': fromSet, 'streams.$.flag': true } },
+    if (textBodyTrimmed.match(/t c s/i)) {
+      if (!botStreamSetting[0].general && !botStreamSetting[0].current) {
+        botStreamSetting = await botCollection.update(
+          { user: userId },
+          { $set: { general: true, help: true, translate: false } },
         );
-        // const response = await userCollection.find({ user: userId }).toArray();
-        // console.log('response:\n', response);
-        askedLangFrom = false;
-        setTranslator = true;
+        // берем настройки из mongodb
+        const userSettings = await userCollection
+          .find({}, { user: userId, streams: { $elemMatch: { idStream: check.id } } })
+          .toArray();
+        const [, toSetHuman] = langKeysValues
+          .find(element => element && element[0] === userSettings[0].streams[0].to);
+        const [, fromSetHuman] = langKeysValues
+          .find(element => element && element[0] === userSettings[0].streams[0].from);
+        const answer = `Current bot translator settings. \nSource language is ${fromSetHuman},\ntarget language is ${toSetHuman}.`;
+        await botPost(teamId, to, comment, streamId, threadId, answer);
+        // mongo. state update
+        await botCollection.update(
+          { user: userId },
+          { $set: { general: false, help: false, translate: true } },
+        );
         return;
       }
-      const answer = `<${text}> is not correct input for me (bot). Please, send me correct name of language exactly from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
+    }
+    // код отправить в ответ сообщение "привет"
+    if (textBodyTrimmed.match(/t s l/)) {
+      if (!botStreamSetting[0].general && !botStreamSetting[0].source) {
+        await botCollection.update(
+          { user: userId },
+          { $set: { general: true, translate: false } },
+        );
+        const answer = `What source language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
+        await botPost(teamId, to, comment, streamId, threadId, answer);
+        // mongo, state update
+        await botCollection.update({ user: userId }, { $set: { source: true } });
+        return;
+      }
+    }
+    if (botStreamSetting[0].general && botStreamSetting[0].source) {
+      const checkedFromLanguage = langKeysValues
+        .find(element => element && element[1] === textBodyTrimmed);
+      // console.log('checkedFromLanguage: ', checkedFromLanguage);
+      if (checkedFromLanguage) {
+        const answer = `Source language is changed to <${checkedFromLanguage[1]}>`;
+        await botPost(teamId, to, comment, streamId, threadId, answer);
+        // mongo. lang update.
+        await userCollection.update(
+          { user: userId, 'streams.idStream': check.id },
+          { $set: { 'streams.$.from': checkedFromLanguage[0], 'streams.$.flag': true } },
+        );
+        // mongo. state update
+        await botCollection.update(
+          { user: userId },
+          { $set: { general: false, source: false, translate: true } },
+        );
+        return;
+      }
+      const answer = `<${textBodyTrimmed}> is not correct input for me (bot). Please, send me correct name of language exactly from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
       await botPost(teamId, to, comment, streamId, threadId, answer);
       return;
     }
     // translate bot settings. На какой язык?
-    if (textBody.match(/t t l/i)) {
-      setTranslator = false;
-      const rawLangs = Object.entries(langs);
-      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-      const answer = `What target language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
-      await botPost(teamId, to, comment, streamId, threadId, answer);
-      askedLangTo = true;
-      return;
-    }
-    // Проверка введенного языка
-    if (askedLangTo) {
-      // console.log('langKeysValues:\n', langKeysValues);
-      const rawLangs = Object.entries(langs);
-      const langKeysValues = rawLangs.slice(0, rawLangs.length - 2);
-      const checkedToLanguage = langKeysValues.find(element => element && element[1] === textBodyTrimmed);
-      // console.log('checkedToLanguage: ', checkedToLanguage);
-      if (checkedToLanguage) {
-        const [toSet] = checkedToLanguage;
-        // console.log('fromSet: ', fromSet);
-        // console.log('toSet: ', toSet);
-        const answer = `Target language is changed to ${toSet}`;
-        await botPost(teamId, to, comment, streamId, threadId, answer);
-        // mongo. Обновление настроек .
-        await userCollection.update(
-          { user: userId, 'streams.idStream': check.id },
-          { $set: { 'streams.$.to': toSet, 'streams.$.flag': true } },
+    if (textBodyTrimmed.match(/t t l/i)) {
+      if (!botStreamSetting[0].general && !botStreamSetting[0].target) {
+        await botCollection.update(
+          { user: userId },
+          { $set: { general: true, translate: false } },
         );
-        setTranslator = true;
-        askedLangTo = false;
+        const answer = `What target language would you set? Please, send me name of language from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
+        await botPost(teamId, to, comment, streamId, threadId, answer);
+        // Монго, set state.
+        await botCollection.update({ user: userId }, { $set: { target: true } });
         return;
       }
-      const answer = `<${text}> is not correct input for me (bot). Please, send me correct name of language exactly from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
+    }
+    // Проверка введенного языка
+    if (botStreamSetting[0].general && botStreamSetting[0].target) {
+      const checkedToLanguage = langKeysValues
+        .find(element => element && element[1] === textBodyTrimmed);
+      // console.log('checkedToLanguage: ', checkedToLanguage);
+      if (checkedToLanguage) {
+        const answer = `Target language is changed to <${checkedToLanguage[1]}>`;
+        await botPost(teamId, to, comment, streamId, threadId, answer);
+        // mongo. lang update.
+        await userCollection.update(
+          { user: userId, 'streams.idStream': check.id },
+          { $set: { 'streams.$.to': checkedToLanguage[0], 'streams.$.flag': true } },
+        );
+        // mongo. state update.
+        await botCollection.update(
+          { user: userId },
+          { $set: { general: false, target: false, translate: true } },
+        );
+        return;
+      }
+      const answer = `<${textBodyTrimmed}> is not correct input for me (bot). Please, send me correct name of language exactly from the list:\n${langKeysValues.map(element => ` ${element[1]}`)}.`;
       await botPost(teamId, to, comment, streamId, threadId, answer);
     }
     // переводчик
-    if (setTranslator) {
+    if (botStreamSetting[0].translate) {
       // берем настройки из mongodb
       const userSettings = await userCollection
         .find({}, { user: userId, streams: { $elemMatch: { idStream: check.id } } })
@@ -214,7 +239,7 @@ async function mention(
       // console.log('userSettings[0].streams[0]\n', userSettings[0].streams[0]);
       const fromSet = userSettings[0].streams[0].from;
       const toSet = userSettings[0].streams[0].to;
-      const answer = await translator(textBody, fromSet, toSet);
+      const answer = await translator(textBodyTrimmed, fromSet, toSet);
       await botPost(teamId, to, comment, streamId, threadId, answer);
     }
   }
