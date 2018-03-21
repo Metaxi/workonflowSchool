@@ -52,5 +52,21 @@ async function nameList(teamId, stream, userId) {
   // console.log('streams', streams);
   return streams;
 }
+// Функция получения списка всех пользователей и вывод списка из трех параметров.
+async function botList(teamId, contact) {
+  const allUsers = await contact.read(teamId, { billingType: 'bots' });
+  const users = [];
+  for (let i = 0; i < allUsers.data.length; i += 1) {
+    // в условии только админы с уникальным id
+    const objectStream = {};
+    objectStream.title = allUsers.data[i].basicData.name;
+    objectStream.email = allUsers.data[i].basicData.email;
+    objectStream.id = allUsers.data[i]._id;
+    users.push(objectStream);
+  }
+  return users;
+}
 
-module.exports = { botPost, translator, nameList };
+module.exports = {
+  botPost, translator, nameList, botList,
+};

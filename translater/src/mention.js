@@ -156,7 +156,7 @@ async function mention(
         return;
       }
     }
-    // код отправить в ответ сообщение "привет"
+    // Настройка языка источника. Какой язык?
     if (textBodyTrimmed.match(/t s l/)) {
       if (!botStreamSetting[0].general && !botStreamSetting[0].source) {
         await botCollection.update(
