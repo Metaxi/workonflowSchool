@@ -5,6 +5,11 @@ const { MongoClient } = require('mongodb');
 // Функции бота
 const app = require('./src/index');
 
+// const creds = {
+//   email: process.env.BOT_LOGIN,
+//   password: process.env.BOT_PASSWORD,
+// };
+
 const {
   creds, direct, mention, created, hire, add,
 } = app;
@@ -15,7 +20,7 @@ const {
   } = await botClient.connect(creds);
   // первое сообщение при покупке бота.
   team.onUserInvited(async (message) => {
-    console.log(message);
+    // console.log(message);
     // const { streamId } = '';
     // const { threadId } = '';
     const { userId } = message.headers;
